@@ -32,3 +32,6 @@ HEADERS += \
 
 FORMS += \
         cmainwindow.ui
+
+RESOURCES += \
+    qtImportState.qrc
