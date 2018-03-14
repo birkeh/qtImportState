@@ -1,20 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>cMainWindow</class>
- <widget class="QDialog" name="cMainWindow" >
-  <property name="geometry" >
+ <widget class="QDialog" name="cMainWindow">
+  <property name="windowModality">
+   <enum>Qt::NonModal</enum>
+  </property>
+  <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>400</width>
-    <height>300</height>
+    <width>1026</width>
+    <height>740</height>
    </rect>
   </property>
-  <property name="windowTitle" >
-   <string>cMainWindow</string>
+  <property name="windowTitle">
+   <string>qtImportState</string>
   </property>
+  <widget class="QTabWidget" name="m_lpMainTab">
+   <property name="geometry">
+    <rect>
+     <x>9</x>
+     <y>9</y>
+     <width>280</width>
+     <height>237</height>
+    </rect>
+   </property>
+   <property name="currentIndex">
+    <number>0</number>
+   </property>
+   <widget class="QWidget" name="m_lpImportTab">
+    <attribute name="title">
+     <string>Import to Database</string>
+    </attribute>
+    <layout class="QGridLayout" name="gridLayout_2">
+     <item row="0" column="0">
+      <widget class="QTreeView" name="m_lpImportList"/>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QWidget" name="m_lpPrepareTab">
+    <attribute name="title">
+     <string>Prepare Values</string>
+    </attribute>
+    <layout class="QGridLayout" name="gridLayout_3">
+     <item row="0" column="0">
+      <widget class="QTreeView" name="m_lpPrepareList"/>
+     </item>
+    </layout>
+   </widget>
+   <widget class="QWidget" name="m_lpGenerateTab">
+    <attribute name="title">
+     <string>Generate Reports</string>
+    </attribute>
+    <layout class="QGridLayout" name="gridLayout_4">
+     <item row="0" column="0">
+      <widget class="QTreeView" name="m_lpGenerateList"/>
+     </item>
+    </layout>
+   </widget>
+  </widget>
  </widget>
- <layoutDefault spacing="6" margin="11" />
- <pixmapfunction></pixmapfunction>
+ <layoutdefault spacing="6" margin="11"/>
  <resources/>
  <connections/>
 </ui>

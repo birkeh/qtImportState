@@ -5,6 +5,11 @@
 #include <QSystemTrayIcon>
 #include <QDialog>
 
+#include <QSqlDatabase>
+#include <QStandardItemModel>
+
+#include <QTimer>
+
 
 namespace Ui {
 class cMainWindow;
@@ -25,12 +30,23 @@ protected:
 
 private slots:
 	void				iconActivated(QSystemTrayIcon::ActivationReason reason);
-	void				messageClicked();
+	void				timerUpdate();
+
+	void				updateImport();
+	void				updatePrepare();
+	void				updateGenerate();
 
 private:
 	Ui::cMainWindow*	ui;
 	QSystemTrayIcon*	m_lpTrayIcon;
 	QMenu*				m_lpTrayIconMenu;
+	QSqlDatabase		m_db;
+	QTimer*				m_lpTimer;
+	bool				m_bMayUpdate;
+
+	QStandardItemModel*	m_lpImportModel;
+	QStandardItemModel*	m_lpPrepareModel;
+	QStandardItemModel*	m_lpGenerateModel;
 
 	QAction*			m_lpMinimizeAction;
 	QAction*			m_lpMaximizeAction;
