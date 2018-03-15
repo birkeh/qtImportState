@@ -61,20 +61,10 @@ cMainWindow::cMainWindow(QWidget *parent) :
 	m_lpTrayIcon->setToolTip("qtImportState");
 	m_lpTrayIcon->show();
 
-	connectDB();
-
 	ui->m_lpMainTab->setCurrentIndex(0);
 
 	m_bMayUpdate	= true;
 	timerUpdate();
-	for(int x = 0;x < PROCESS_ROWS;x++)
-		ui->m_lpProcessList->resizeColumnToContents(x);
-	for(int x = 0;x < IMPORT_ROWS;x++)
-		ui->m_lpImportList->resizeColumnToContents(x);
-	for(int x = 0;x < PREPARE_ROWS;x++)
-		ui->m_lpPrepareList->resizeColumnToContents(x);
-	for(int x = 0;x < GENERATE_ROWS;x++)
-		ui->m_lpGenerateList->resizeColumnToContents(x);
 	m_bMayUpdate	= false;
 
 	setTimer();
@@ -174,10 +164,10 @@ void cMainWindow::iconActivated(QSystemTrayIcon::ActivationReason reason)
 	}
 }
 
-void cMainWindow::connectDB()
+cMainWindow::DBSTATE cMainWindow::connectDB()
 {
-	if(m_db.isOpen())
-		return;
+	if(m_db.isOpen() && m_db.tables().count())
+		return(DBSTATE_OK);
 
 	QSettings	settings;
 	QString		szHostName		= settings.value("database/hostName", "10.69.208.60").toString();
@@ -191,7 +181,24 @@ void cMainWindow::connectDB()
 	m_db.setUserName(szUserName);
 	m_db.setPassword(szPassword);
 	if(!m_db.open())
+	{
 		qDebug() << m_db.lastError().text();
+		return(DBSTATE_ERROR);
+	}
+
+	return(DBSTATE_RESIZE);
+}
+
+void cMainWindow::resizeColumns()
+{
+	for(int x = 0;x < PROCESS_ROWS;x++)
+		ui->m_lpProcessList->resizeColumnToContents(x);
+	for(int x = 0;x < IMPORT_ROWS;x++)
+		ui->m_lpImportList->resizeColumnToContents(x);
+	for(int x = 0;x < PREPARE_ROWS;x++)
+		ui->m_lpPrepareList->resizeColumnToContents(x);
+	for(int x = 0;x < GENERATE_ROWS;x++)
+		ui->m_lpGenerateList->resizeColumnToContents(x);
 }
 
 void cMainWindow::setTimer()
@@ -220,19 +227,22 @@ void cMainWindow::timerUpdate()
 	m_bMayUpdate			= false;
 	QSettings		settings;
 	qint32			iTimer	= settings.value("timer/timeout", 10000).toInt();
+	DBSTATE			dbState	= connectDB();
 
-	connectDB();
-	updateProcessList();
-	updateImport();
-	updatePrepare();
-	updateGenerate();
+	updateProcessList(dbState);
+	updateImport(dbState);
+	updatePrepare(dbState);
+	updateGenerate(dbState);
+
+	if(dbState == DBSTATE_RESIZE)
+		resizeColumns();
 
 	ui->m_lpStatusBar->showMessage(QString("Last update: %1, next update: %2").arg(QDateTime::currentDateTime().toString("dd.MM.yyyy HH:mm:ss")).arg(QDateTime::currentDateTime().addMSecs(iTimer).toString("dd.MM.yyyy HH:mm:ss")));
 
 	m_bMayUpdate	= true;
 }
 
-void cMainWindow::updateProcessList()
+void cMainWindow::updateProcessList(DBSTATE dbState)
 {
 	QSettings		settings;
 	QModelIndex		index		= ui->m_lpProcessList->indexAt(ui->m_lpProcessList->rect().topLeft());
@@ -259,76 +269,72 @@ void cMainWindow::updateProcessList()
 
 	m_lpProcessModel->setHorizontalHeaderLabels(header);
 
-	if(!m_db.isOpen())
+	if(dbState != DBSTATE_ERROR)
 	{
-		m_bMayUpdate	= true;
-		return;
-	}
+		QSqlQuery*	lpQuery	= new QSqlQuery(m_db);
 
-	QSqlQuery*	lpQuery	= new QSqlQuery(m_db);
+		lpQuery->prepare(QString("SELECT ID, USER, HOST, DB, COMMAND, TIME, STATE, INFO FROM INFORMATION_SCHEMA.PROCESSLIST WHERE db = '%1';").arg(szDB));
+		if(!lpQuery->exec())
+		{
+			qDebug() << lpQuery->lastError().text();
+			delete lpQuery;
+			return;
+		}
 
-	lpQuery->prepare(QString("SELECT ID, USER, HOST, DB, COMMAND, TIME, STATE, INFO FROM INFORMATION_SCHEMA.PROCESSLIST WHERE db = '%1';").arg(szDB));
-	if(!lpQuery->exec())
-	{
-		m_bMayUpdate	= true;
-		qDebug() << lpQuery->lastError().text();
+		while(lpQuery->next())
+		{
+			if(lpQuery->value("DB").toString() != szUser)
+				continue;
+			if(lpQuery->value("HOST").toString() != szHost)
+				continue;
+			if(lpQuery->value("DB").toString() != szDB)
+				continue;
+			if(lpQuery->value("COMMAND").toString() != szCommand)
+				continue;
+			if(lpQuery->value("INFO").toString().startsWith("SELECT ID, USER, HOST, DB, COMMAND, TIME, STATE, INFO FROM INFORMATION_SCHEMA.PROCESSLIST", Qt::CaseInsensitive))
+				continue;
+
+			QList<QStandardItem*>	items;
+			QString					szInfo	= lpQuery->value("INFO").toString();
+
+			if(szInfo.contains("\n"))
+				szInfo	= szInfo.left(szInfo.indexOf("\n")) + " ...";
+
+			qint32	iSecond	= lpQuery->value("TIME").toInt();
+			qint32	iHour	= iSecond/3600;
+			iSecond			-= iHour*3600;
+			qint32	iMinute	= iSecond/60;
+			iSecond			-= iMinute*60;
+
+			QTime time(iHour, iMinute, iSecond);
+			items.append(new QStandardItem(lpQuery->value("COMMAND").toString()));
+			items.append(new QStandardItem(time.toString()));
+			items.append(new QStandardItem(lpQuery->value("STATE").toString()));
+			items.append(new QStandardItem(szInfo));
+
+			items[1]->setTextAlignment(Qt::AlignRight);
+
+			m_lpProcessModel->appendRow(items);
+		}
+
 		delete lpQuery;
-		return;
-	}
 
-	while(lpQuery->next())
-	{
-		if(lpQuery->value("DB").toString() != szUser)
-			continue;
-		if(lpQuery->value("HOST").toString() != szHost)
-			continue;
-		if(lpQuery->value("DB").toString() != szDB)
-			continue;
-		if(lpQuery->value("COMMAND").toString() != szCommand)
-			continue;
-		if(lpQuery->value("INFO").toString().startsWith("SELECT ID, USER, HOST, DB, COMMAND, TIME, STATE, INFO FROM INFORMATION_SCHEMA.PROCESSLIST", Qt::CaseInsensitive))
-			continue;
+		index	= m_lpProcessModel->index(row, 0);
 
-		QList<QStandardItem*>	items;
-		QString					szInfo	= lpQuery->value("INFO").toString();
+		ui->m_lpProcessList->scrollTo(index, QAbstractItemView::PositionAtTop);
 
-		if(szInfo.contains("\n"))
-			szInfo	= szInfo.left(szInfo.indexOf("\n")) + " ...";
-
-		qint32	iSecond	= lpQuery->value("TIME").toInt();
-		qint32	iHour	= iSecond/3600;
-		iSecond			-= iHour*3600;
-		qint32	iMinute	= iSecond/60;
-		iSecond			-= iMinute*60;
-
-		QTime time(iHour, iMinute, iSecond);
-		items.append(new QStandardItem(lpQuery->value("COMMAND").toString()));
-		items.append(new QStandardItem(time.toString()));
-		items.append(new QStandardItem(lpQuery->value("STATE").toString()));
-		items.append(new QStandardItem(szInfo));
-
-		items[1]->setTextAlignment(Qt::AlignRight);
-
-		m_lpProcessModel->appendRow(items);
-	}
-
-	delete lpQuery;
-
-	index	= m_lpProcessModel->index(row, 0);
-
-	ui->m_lpProcessList->scrollTo(index, QAbstractItemView::PositionAtTop);
-
-	if(selected != -1)
-	{
-		index	= m_lpProcessModel->index(selected, 0);
-		ui->m_lpProcessList->setCurrentIndex(index);
+		if(selected != -1)
+		{
+			index	= m_lpProcessModel->index(selected, 0);
+			ui->m_lpProcessList->setCurrentIndex(index);
+		}
 	}
 
 	for(int x = 0;x < PROCESS_ROWS;x++)
 		ui->m_lpProcessList->setColumnWidth(x, col[x]);
 }
 
-void cMainWindow::updateImport()
+void cMainWindow::updateImport(DBSTATE dbState)
 {
 	QModelIndex		index		= ui->m_lpImportList->indexAt(ui->m_lpImportList->rect().topLeft());
 	qint32			row			= index.row();
@@ -350,74 +356,71 @@ void cMainWindow::updateImport()
 
 	m_lpImportModel->setHorizontalHeaderLabels(header);
 
-	if(!m_db.isOpen())
+	if(dbState != DBSTATE_ERROR)
 	{
-		m_bMayUpdate	= true;
-		return;
-	}
+		QSqlQuery*	lpQuery	= new QSqlQuery(m_db);
 
-	QSqlQuery*	lpQuery	= new QSqlQuery(m_db);
+		lpQuery->prepare("SELECT	@rowid:=@rowid+1 AS number, "
+						 "          t1.group_name, "
+						 "          t1.table_name, "
+						 "          CAST(IFNULL(DATE_FORMAT(t1.start, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) current_start, "
+						 "          CAST(IFNULL(DATE_FORMAT(t1.finish, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) current_finish, "
+						 "          CAST(IFNULL(t1.duration, '') AS CHAR) current_duration "
+						 "FROM		v_imp_log t1, "
+						 "          (SELECT @rowid:=0) AS init "
+						 "WHERE		( "
+						 "              t1.start >= "
+						 "              ( "
+						 "					SELECT	MAX(start) "
+						 "					FROM	imp_log "
+						 "					WHERE	group_name = 'import_task' "
+						 "				) OR "
+						 "				t1.start IS NULL "
+						 "			) AND "
+						 "			t1.group_name='import' "
+						 "ORDER BY	@rowid:=@rowid+1; ");
+		if(!lpQuery->exec())
+		{
+			m_bMayUpdate	= true;
+			qDebug() << lpQuery->lastError().text();
+			delete lpQuery;
+			return;
+		}
 
-	lpQuery->prepare("SELECT	@rowid:=@rowid+1 AS number, "
-					 "          t1.group_name, "
-					 "          t1.table_name, "
-					 "          CAST(IFNULL(DATE_FORMAT(t1.start, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) current_start, "
-					 "          CAST(IFNULL(DATE_FORMAT(t1.finish, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) current_finish, "
-					 "          CAST(IFNULL(t1.duration, '') AS CHAR) current_duration "
-					 "FROM		v_imp_log t1, "
-					 "          (SELECT @rowid:=0) AS init "
-					 "WHERE		( "
-					 "              t1.start >= "
-					 "              ( "
-					 "					SELECT	MAX(start) "
-					 "					FROM	imp_log "
-					 "					WHERE	group_name = 'import_task' "
-					 "				) OR "
-					 "				t1.start IS NULL "
-					 "			) AND "
-					 "			t1.group_name='import' "
-					 "ORDER BY	@rowid:=@rowid+1; ");
-	if(!lpQuery->exec())
-	{
-		m_bMayUpdate	= true;
-		qDebug() << lpQuery->lastError().text();
+		while(lpQuery->next())
+		{
+			QList<QStandardItem*>	items;
+
+			items.append(new QStandardItem(lpQuery->value("number").toString()));
+			items.append(new QStandardItem(lpQuery->value("group_name").toString()));
+			items.append(new QStandardItem(lpQuery->value("table_name").toString()));
+			items.append(new QStandardItem(lpQuery->value("current_start").toString()));
+			items.append(new QStandardItem(lpQuery->value("current_finish").toString()));
+			items.append(new QStandardItem(lpQuery->value("current_duration").toString()));
+
+			items[0]->setTextAlignment(Qt::AlignRight);
+
+			m_lpImportModel->appendRow(items);
+		}
+
 		delete lpQuery;
-		return;
-	}
 
-	while(lpQuery->next())
-	{
-		QList<QStandardItem*>	items;
+		index	= m_lpImportModel->index(row, 0);
 
-		items.append(new QStandardItem(lpQuery->value("number").toString()));
-		items.append(new QStandardItem(lpQuery->value("group_name").toString()));
-		items.append(new QStandardItem(lpQuery->value("table_name").toString()));
-		items.append(new QStandardItem(lpQuery->value("current_start").toString()));
-		items.append(new QStandardItem(lpQuery->value("current_finish").toString()));
-		items.append(new QStandardItem(lpQuery->value("current_duration").toString()));
+		ui->m_lpImportList->scrollTo(index, QAbstractItemView::PositionAtTop);
 
-		items[0]->setTextAlignment(Qt::AlignRight);
-
-		m_lpImportModel->appendRow(items);
-	}
-
-	delete lpQuery;
-
-	index	= m_lpImportModel->index(row, 0);
-
-	ui->m_lpImportList->scrollTo(index, QAbstractItemView::PositionAtTop);
-
-	if(selected != -1)
-	{
-		index	= m_lpImportModel->index(selected, 0);
-		ui->m_lpImportList->setCurrentIndex(index);
+		if(selected != -1)
+		{
+			index	= m_lpImportModel->index(selected, 0);
+			ui->m_lpImportList->setCurrentIndex(index);
+		}
 	}
 
 	for(int x = 0;x < IMPORT_ROWS;x++)
 		ui->m_lpImportList->setColumnWidth(x, col[x]);
 }
 
-void cMainWindow::updatePrepare()
+void cMainWindow::updatePrepare(DBSTATE dbState)
 {
 	QModelIndex		index		= ui->m_lpPrepareList->indexAt(ui->m_lpPrepareList->rect().topLeft());
 	qint32			row			= index.row();
@@ -439,74 +442,71 @@ void cMainWindow::updatePrepare()
 
 	m_lpPrepareModel->setHorizontalHeaderLabels(header);
 
-	if(!m_db.isOpen())
+	if(dbState != DBSTATE_ERROR)
 	{
-		m_bMayUpdate	= true;
-		return;
-	}
+		QSqlQuery*	lpQuery	= new QSqlQuery(m_db);
 
-	QSqlQuery*	lpQuery	= new QSqlQuery(m_db);
+		lpQuery->prepare("SELECT	@rowid:=@rowid+1 AS number, "
+						 "			t1.group_name, "
+						 "			t1.table_name, "
+						 "			CAST(IFNULL(DATE_FORMAT(t1.current_start, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) current_start, "
+						 "			CAST(IFNULL(DATE_FORMAT(t1.current_finish, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) current_finish, "
+						 "			CAST(IFNULL(t1.current_duration, '') AS CHAR) current_duration, "
+						 "			CAST(IFNULL(DATE_FORMAT(t1.estimated, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) estimated "
+						 "FROM		v_imp_log_detail_estimation t1, "
+						 "			(SELECT @rowid:=0) AS init "
+						 "WHERE		t1.current_start >= "
+						 "			( "
+						 "				SELECT	MAX(start) "
+						 "				FROM	imp_log "
+						 "				WHERE	table_name = 'errorstate' AND "
+						 "						group_name = 'UKMS Start' "
+						 "			) OR "
+						 "			t1.current_start IS NULL "
+						 "ORDER BY	@rowid:=@rowid+1; ");
+		if(!lpQuery->exec())
+		{
+			m_bMayUpdate	= true;
+			qDebug() << lpQuery->lastError().text();
+			delete lpQuery;
+			return;
+		}
 
-	lpQuery->prepare("SELECT	@rowid:=@rowid+1 AS number, "
-					 "			t1.group_name, "
-					 "			t1.table_name, "
-					 "			CAST(IFNULL(DATE_FORMAT(t1.current_start, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) current_start, "
-					 "			CAST(IFNULL(DATE_FORMAT(t1.current_finish, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) current_finish, "
-					 "			CAST(IFNULL(t1.current_duration, '') AS CHAR) current_duration, "
-					 "			CAST(IFNULL(DATE_FORMAT(t1.estimated, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) estimated "
-					 "FROM		v_imp_log_detail_estimation t1, "
-					 "			(SELECT @rowid:=0) AS init "
-					 "WHERE		t1.current_start >= "
-					 "			( "
-					 "				SELECT	MAX(start) "
-					 "				FROM	imp_log "
-					 "				WHERE	table_name = 'errorstate' AND "
-					 "						group_name = 'UKMS Start' "
-					 "			) OR "
-					 "			t1.current_start IS NULL "
-					 "ORDER BY	@rowid:=@rowid+1; ");
-	if(!lpQuery->exec())
-	{
-		m_bMayUpdate	= true;
-		qDebug() << lpQuery->lastError().text();
+		while(lpQuery->next())
+		{
+			QList<QStandardItem*>	items;
+
+			items.append(new QStandardItem(lpQuery->value("number").toString()));
+			items.append(new QStandardItem(lpQuery->value("group_name").toString()));
+			items.append(new QStandardItem(lpQuery->value("table_name").toString()));
+			items.append(new QStandardItem(lpQuery->value("current_start").toString()));
+			items.append(new QStandardItem(lpQuery->value("current_finish").toString()));
+			items.append(new QStandardItem(lpQuery->value("current_duration").toString()));
+			items.append(new QStandardItem(lpQuery->value("estimated").toString()));
+
+			items[0]->setTextAlignment(Qt::AlignRight);
+
+			m_lpPrepareModel->appendRow(items);
+		}
+
 		delete lpQuery;
-		return;
-	}
 
-	while(lpQuery->next())
-	{
-		QList<QStandardItem*>	items;
+		index	= m_lpPrepareModel->index(row, 0);
 
-		items.append(new QStandardItem(lpQuery->value("number").toString()));
-		items.append(new QStandardItem(lpQuery->value("group_name").toString()));
-		items.append(new QStandardItem(lpQuery->value("table_name").toString()));
-		items.append(new QStandardItem(lpQuery->value("current_start").toString()));
-		items.append(new QStandardItem(lpQuery->value("current_finish").toString()));
-		items.append(new QStandardItem(lpQuery->value("current_duration").toString()));
-		items.append(new QStandardItem(lpQuery->value("estimated").toString()));
+		ui->m_lpPrepareList->scrollTo(index, QAbstractItemView::PositionAtTop);
 
-		items[0]->setTextAlignment(Qt::AlignRight);
-
-		m_lpPrepareModel->appendRow(items);
-	}
-
-	delete lpQuery;
-
-	index	= m_lpPrepareModel->index(row, 0);
-
-	ui->m_lpPrepareList->scrollTo(index, QAbstractItemView::PositionAtTop);
-
-	if(selected != -1)
-	{
-		index	= m_lpPrepareModel->index(selected, 0);
-		ui->m_lpPrepareList->setCurrentIndex(index);
+		if(selected != -1)
+		{
+			index	= m_lpPrepareModel->index(selected, 0);
+			ui->m_lpPrepareList->setCurrentIndex(index);
+		}
 	}
 
 	for(int x = 0;x < PREPARE_ROWS;x++)
 		ui->m_lpPrepareList->setColumnWidth(x, col[x]);
 }
 
-void cMainWindow::updateGenerate()
+void cMainWindow::updateGenerate(DBSTATE dbState)
 {
 	QModelIndex		index		= ui->m_lpGenerateList->indexAt(ui->m_lpGenerateList->rect().topLeft());
 	qint32			row			= index.row();
@@ -528,65 +528,62 @@ void cMainWindow::updateGenerate()
 
 	m_lpGenerateModel->setHorizontalHeaderLabels(header);
 
-	if(!m_db.isOpen())
+	if(dbState != DBSTATE_ERROR)
 	{
-		m_bMayUpdate	= true;
-		return;
-	}
+		QSqlQuery*	lpQuery	= new QSqlQuery(m_db);
 
-	QSqlQuery*	lpQuery	= new QSqlQuery(m_db);
+		lpQuery->prepare("SELECT		@rowid:=@rowid+1 AS number, "
+						 "              t1.group_name AS group_name, "
+						 "              t1.table_name AS table_name, "
+						 "              CAST(IFNULL(DATE_FORMAT(t1.current_start, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) AS current_start, "
+						 "              CAST(IFNULL(DATE_FORMAT(t1.current_finish, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) AS current_finish, "
+						 "              CAST(IFNULL(t1.current_duration, '') AS CHAR) AS current_duration, "
+						 "              CAST(IFNULL(DATE_FORMAT(t1.estimated, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) AS estimated "
+						 "FROM		    v_imp_log_estimation AS t1, "
+						 "              (SELECT @rowid:=0) AS init "
+						 "WHERE		    t1.current_start >= "
+						 "              ( "
+						 "              	SELECT	MAX(start) "
+						 "              	FROM	imp_log "
+						 "              	WHERE	table_name = 'rep_UKMS_KFZ_transaction_overall_M' "
+						 "              ) OR "
+						 "              t1.current_start IS NULL");
+		if(!lpQuery->exec())
+		{
+			m_bMayUpdate	= true;
+			qDebug() << lpQuery->lastError().text();
+			delete lpQuery;
+			return;
+		}
 
-	lpQuery->prepare("SELECT		@rowid:=@rowid+1 AS number, "
-					 "              t1.group_name AS group_name, "
-					 "              t1.table_name AS table_name, "
-					 "              CAST(IFNULL(DATE_FORMAT(t1.current_start, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) AS current_start, "
-					 "              CAST(IFNULL(DATE_FORMAT(t1.current_finish, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) AS current_finish, "
-					 "              CAST(IFNULL(t1.current_duration, '') AS CHAR) AS current_duration, "
-					 "              CAST(IFNULL(DATE_FORMAT(t1.estimated, '%Y-%m-%d %H:%i:%s'), '') AS CHAR) AS estimated "
-					 "FROM		    v_imp_log_estimation AS t1, "
-					 "              (SELECT @rowid:=0) AS init "
-					 "WHERE		    t1.current_start >= "
-					 "              ( "
-					 "              	SELECT	MAX(start) "
-					 "              	FROM	imp_log "
-					 "              	WHERE	table_name = 'rep_UKMS_KFZ_transaction_overall_M' "
-					 "              ) OR "
-					 "              t1.current_start IS NULL");
-	if(!lpQuery->exec())
-	{
-		m_bMayUpdate	= true;
-		qDebug() << lpQuery->lastError().text();
+		while(lpQuery->next())
+		{
+			QList<QStandardItem*>	items;
+
+			items.append(new QStandardItem(lpQuery->value("number").toString()));
+			items.append(new QStandardItem(lpQuery->value("group_name").toString()));
+			items.append(new QStandardItem(lpQuery->value("table_name").toString()));
+			items.append(new QStandardItem(lpQuery->value("current_start").toString()));
+			items.append(new QStandardItem(lpQuery->value("current_finish").toString()));
+			items.append(new QStandardItem(lpQuery->value("current_duration").toString()));
+			items.append(new QStandardItem(lpQuery->value("estimated").toString()));
+
+			items[0]->setTextAlignment(Qt::AlignRight);
+
+			m_lpGenerateModel->appendRow(items);
+		}
+
 		delete lpQuery;
-		return;
-	}
 
-	while(lpQuery->next())
-	{
-		QList<QStandardItem*>	items;
+		index	= m_lpGenerateModel->index(row, 0);
 
-		items.append(new QStandardItem(lpQuery->value("number").toString()));
-		items.append(new QStandardItem(lpQuery->value("group_name").toString()));
-		items.append(new QStandardItem(lpQuery->value("table_name").toString()));
-		items.append(new QStandardItem(lpQuery->value("current_start").toString()));
-		items.append(new QStandardItem(lpQuery->value("current_finish").toString()));
-		items.append(new QStandardItem(lpQuery->value("current_duration").toString()));
-		items.append(new QStandardItem(lpQuery->value("estimated").toString()));
+		ui->m_lpGenerateList->scrollTo(index, QAbstractItemView::PositionAtTop);
 
-		items[0]->setTextAlignment(Qt::AlignRight);
-
-		m_lpGenerateModel->appendRow(items);
-	}
-
-	delete lpQuery;
-
-	index	= m_lpGenerateModel->index(row, 0);
-
-	ui->m_lpGenerateList->scrollTo(index, QAbstractItemView::PositionAtTop);
-
-	if(selected != -1)
-	{
-		index	= m_lpGenerateModel->index(selected, 0);
-		ui->m_lpGenerateList->setCurrentIndex(index);
+		if(selected != -1)
+		{
+			index	= m_lpGenerateModel->index(selected, 0);
+			ui->m_lpGenerateList->setCurrentIndex(index);
+		}
 	}
 
 	for(int x = 0;x < GENERATE_ROWS;x++)

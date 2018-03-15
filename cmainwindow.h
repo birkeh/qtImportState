@@ -20,6 +20,13 @@ class cMainWindow : public QMainWindow
 	Q_OBJECT
 
 public:
+	enum DBSTATE
+	{
+		DBSTATE_OK		= 1,
+		DBSTATE_ERROR	= 2,
+		DBSTATE_RESIZE	= 3,
+	};
+
 	explicit cMainWindow(QWidget *parent = 0);
 	~cMainWindow();
 
@@ -32,10 +39,10 @@ private slots:
 	void				iconActivated(QSystemTrayIcon::ActivationReason reason);
 	void				timerUpdate();
 
-	void				updateProcessList();
-	void				updateImport();
-	void				updatePrepare();
-	void				updateGenerate();
+	void				updateProcessList(DBSTATE dbState);
+	void				updateImport(DBSTATE dbState);
+	void				updatePrepare(DBSTATE dbState);
+	void				updateGenerate(DBSTATE dbState);
 
 private:
 	Ui::cMainWindow*	ui;
@@ -58,8 +65,10 @@ private:
 	void				createActions();
 	void				createTrayIcon();
 
-	void				connectDB();
+	DBSTATE				connectDB();
 	void				setTimer();
+
+	void				resizeColumns();
 };
 
 #endif // CMAINWINDOW_H
