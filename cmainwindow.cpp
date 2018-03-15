@@ -295,8 +295,15 @@ void cMainWindow::updateProcessList()
 		if(szInfo.contains("\n"))
 			szInfo	= szInfo.left(szInfo.indexOf("\n")) + " ...";
 
+		qint32	iSecond	= lpQuery->value("TIME").toInt();
+		qint32	iHour	= iSecond/3600;
+		iSecond			-= iHour*3600;
+		qint32	iMinute	= iSecond/60;
+		iSecond			-= iMinute*60;
+
+		QTime time(iHour, iMinute, iSecond);
 		items.append(new QStandardItem(lpQuery->value("COMMAND").toString()));
-		items.append(new QStandardItem(lpQuery->value("TIME").toString()));
+		items.append(new QStandardItem(time.toString()));
 		items.append(new QStandardItem(lpQuery->value("STATE").toString()));
 		items.append(new QStandardItem(szInfo));
 
