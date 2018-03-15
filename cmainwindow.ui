@@ -1,66 +1,86 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
  <class>cMainWindow</class>
- <widget class="QDialog" name="cMainWindow">
-  <property name="windowModality">
-   <enum>Qt::NonModal</enum>
-  </property>
+ <widget class="QMainWindow" name="cMainWindow">
   <property name="geometry">
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1026</width>
-    <height>740</height>
+    <width>800</width>
+    <height>600</height>
    </rect>
   </property>
   <property name="windowTitle">
    <string>qtImportState</string>
   </property>
-  <widget class="QTabWidget" name="m_lpMainTab">
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QGridLayout" name="gridLayout">
+    <item row="0" column="0">
+     <widget class="QSplitter" name="m_lpMainSplitter">
+      <property name="minimumSize">
+       <size>
+        <width>10</width>
+        <height>10</height>
+       </size>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+      <property name="childrenCollapsible">
+       <bool>false</bool>
+      </property>
+      <widget class="QTreeView" name="m_lpProcessList"/>
+      <widget class="QTabWidget" name="m_lpMainTab">
+       <property name="currentIndex">
+        <number>2</number>
+       </property>
+       <widget class="QWidget" name="m_lpImportTab">
+        <attribute name="title">
+         <string>Import to Database</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_2">
+         <item row="0" column="0">
+          <widget class="QTreeView" name="m_lpImportList"/>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="m_lpPrepareTab">
+        <attribute name="title">
+         <string>Prepare Values</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_3">
+         <item row="0" column="0">
+          <widget class="QTreeView" name="m_lpPrepareList"/>
+         </item>
+        </layout>
+       </widget>
+       <widget class="QWidget" name="m_lpGenerateTab">
+        <attribute name="title">
+         <string>Generate Reports</string>
+        </attribute>
+        <layout class="QGridLayout" name="gridLayout_4">
+         <item row="0" column="0">
+          <widget class="QTreeView" name="m_lpGenerateList"/>
+         </item>
+        </layout>
+       </widget>
+      </widget>
+     </widget>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="m_lpMenuBar">
    <property name="geometry">
     <rect>
-     <x>9</x>
-     <y>9</y>
-     <width>280</width>
-     <height>237</height>
+     <x>0</x>
+     <y>0</y>
+     <width>800</width>
+     <height>21</height>
     </rect>
    </property>
-   <property name="currentIndex">
-    <number>0</number>
-   </property>
-   <widget class="QWidget" name="m_lpImportTab">
-    <attribute name="title">
-     <string>Import to Database</string>
-    </attribute>
-    <layout class="QGridLayout" name="gridLayout_2">
-     <item row="0" column="0">
-      <widget class="QTreeView" name="m_lpImportList"/>
-     </item>
-    </layout>
-   </widget>
-   <widget class="QWidget" name="m_lpPrepareTab">
-    <attribute name="title">
-     <string>Prepare Values</string>
-    </attribute>
-    <layout class="QGridLayout" name="gridLayout_3">
-     <item row="0" column="0">
-      <widget class="QTreeView" name="m_lpPrepareList"/>
-     </item>
-    </layout>
-   </widget>
-   <widget class="QWidget" name="m_lpGenerateTab">
-    <attribute name="title">
-     <string>Generate Reports</string>
-    </attribute>
-    <layout class="QGridLayout" name="gridLayout_4">
-     <item row="0" column="0">
-      <widget class="QTreeView" name="m_lpGenerateList"/>
-     </item>
-    </layout>
-   </widget>
   </widget>
+  <widget class="QStatusBar" name="m_lpStatusBar"/>
  </widget>
- <layoutdefault spacing="6" margin="11"/>
  <resources/>
  <connections/>
 </ui>

@@ -3,7 +3,7 @@
 
 
 #include <QSystemTrayIcon>
-#include <QDialog>
+#include <QMainWindow>
 
 #include <QSqlDatabase>
 #include <QStandardItemModel>
@@ -15,7 +15,7 @@ namespace Ui {
 class cMainWindow;
 }
 
-class cMainWindow : public QDialog
+class cMainWindow : public QMainWindow
 {
 	Q_OBJECT
 
@@ -32,6 +32,7 @@ private slots:
 	void				iconActivated(QSystemTrayIcon::ActivationReason reason);
 	void				timerUpdate();
 
+	void				updateProcessList();
 	void				updateImport();
 	void				updatePrepare();
 	void				updateGenerate();
@@ -44,6 +45,7 @@ private:
 	QTimer*				m_lpTimer;
 	bool				m_bMayUpdate;
 
+	QStandardItemModel*	m_lpProcessModel;
 	QStandardItemModel*	m_lpImportModel;
 	QStandardItemModel*	m_lpPrepareModel;
 	QStandardItemModel*	m_lpGenerateModel;
@@ -55,6 +57,9 @@ private:
 
 	void				createActions();
 	void				createTrayIcon();
+
+	void				connectDB();
+	void				setTimer();
 };
 
 #endif // CMAINWINDOW_H
