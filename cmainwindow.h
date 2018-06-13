@@ -44,6 +44,8 @@ private slots:
 	void				updatePrepare(DBSTATE dbState);
 	void				updateGenerate(DBSTATE dbState);
 
+	void on_actionE_xit_triggered();
+
 private:
 	Ui::cMainWindow*	ui;
 	QSystemTrayIcon*	m_lpTrayIcon;

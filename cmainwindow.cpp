@@ -589,3 +589,8 @@ void cMainWindow::updateGenerate(DBSTATE dbState)
 	for(int x = 0;x < GENERATE_ROWS;x++)
 		ui->m_lpGenerateList->setColumnWidth(x, col[x]);
 }
+
+void cMainWindow::on_actionE_xit_triggered()
+{
+	QCoreApplication::quit();
+}
