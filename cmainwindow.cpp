@@ -547,7 +547,8 @@ void cMainWindow::updateGenerate(DBSTATE dbState)
 						 "              	FROM	imp_log "
 						 "              	WHERE	table_name = 'rep_UKMS_KFZ_transaction_overall_M' "
 						 "              ) OR "
-						 "              t1.current_start IS NULL");
+						 "              t1.current_start IS NULL "
+						 "ORDER BY		t1.basis_start;");
 		if(!lpQuery->exec())
 		{
 			m_bMayUpdate	= true;
